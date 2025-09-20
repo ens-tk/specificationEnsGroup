@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Объединение Excel</title>
+</head>
+<body>
+  <h1>Загрузите Excel-файлы со спецификацией</h1>
+  <form action="/upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="files" accept=".xls,.xlsx" multiple required>
+    <button type="submit">Объединить файлы</button>
+  </form>
+</body>
+</html>
