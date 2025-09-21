@@ -1,0 +1,51 @@
+body { 
+  font-family: Arial, sans-serif; 
+  margin: 20px; 
+}
+
+.file-list { 
+  margin-top: 10px; 
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+  background: #f5f5f5;
+  padding: 5px 10px;
+  border-radius: 6px;
+}
+
+.remove-btn {
+  margin-left: 10px;
+  background: red;
+  color: white;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+#fileInput {
+  display: none;
+}
+
+.custom-btn {
+  display: inline-block;
+  background: #1976d2;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.custom-btn:hover {
+  background: #1565c0;
+}
+
+.file-counter {
+  margin-left: 10px;
+  font-style: italic;
+  color: #555;
+}
