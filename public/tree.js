@@ -10,8 +10,10 @@ function FileNode(file, name = null) {
   this.name = name || (file ? file.name : "");
   this.children = [];
   this.subassemblies = [];
-  this.qty = 1; // количество справа в таблице
+  this.qty = 1;
+  this.expanded = true; // 🔹 по умолчанию раскрыт
 }
+
 
 // Выбор корневого файла
 rootInput.addEventListener("change", e => {
@@ -85,15 +87,16 @@ function createNodeElement(node) {
   const header = document.createElement("div");
   header.className = "node-header";
 
-  const toggle = document.createElement("span");
-  toggle.className = "toggle-btn";
-  toggle.textContent = node.subassemblies.length > 0 ? "▼" : "";
-  toggle.onclick = () => {
-    const childrenDiv = div.querySelector(".children");
-    if (!childrenDiv) return;
-    childrenDiv.style.display = childrenDiv.style.display === "none" ? "block" : "none";
-    toggle.textContent = childrenDiv.style.display === "none" ? "▶" : "▼";
-  };
+const toggle = document.createElement("span");
+toggle.className = "toggle-btn";
+toggle.textContent = node.subassemblies.length > 0
+  ? (node.expanded ? "▼" : "▶")
+  : "";
+
+toggle.onclick = () => {
+  node.expanded = !node.expanded; // 🔹 сохраняем состояние
+  renderTree(); // перерисовываем
+};
 
   const span = document.createElement("span");
   span.textContent = node.name;
@@ -125,12 +128,13 @@ function createNodeElement(node) {
 
   div.appendChild(header);
 
-  const childrenDiv = document.createElement("div");
-  childrenDiv.className = "children";
-  childrenDiv.style.marginLeft = "20px";
-  node.subassemblies.forEach(sub => childrenDiv.appendChild(createNodeElement(sub)));
+const childrenDiv = document.createElement("div");
+childrenDiv.className = "children";
+childrenDiv.style.marginLeft = "20px";
+childrenDiv.style.display = node.expanded ? "block" : "none"; // 🔹 учёт expanded
+node.subassemblies.forEach(sub => childrenDiv.appendChild(createNodeElement(sub)));
+div.appendChild(childrenDiv);
 
-  div.appendChild(childrenDiv);
   return div;
 }
 
