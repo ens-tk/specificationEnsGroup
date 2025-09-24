@@ -8,84 +8,150 @@ const app = express();
 const port = 3000;
 
 const upload = multer({ dest: "uploads/" });
-
 app.use(express.static("public"));
 
-app.post("/upload", upload.array("files", 20), (req, res) => {
-    const files = req.files;
-    if (!files || files.length === 0) return res.status(400).send("Файлы не загружены");
+// 🔄 Recursive Excel processing
+function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) {
+    const workbook = XLSX.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-    const itemsMap = {};
+    console.log(`\n📄 Processing file: ${path.basename(filePath)} | multiplier = ${multiplier}`);
 
-    try {
-        files.forEach(file => {
-            const workbook = XLSX.readFile(file.path);
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    // -------------------------------
+    // 1️⃣ Subassemblies
+    let foundSubassemblies = false;
+    let subColIndex = null;
+    let skipNextSub = false;
 
-            let foundSection = false;
-            let skipNext = false;
-            let colIndex = null;
+    for (let row of rows) {
+        if (!row) continue;
 
-            for (let row of rows) {
-                if (!row) continue;
-
-                if (!foundSection) {
-                    for (let i = 0; i < row.length; i++) {
-                        const cell = row[i];
-                        if (cell && cell.toString().toLowerCase().includes("стандартные изделия")) {
-                            foundSection = true;
-                            colIndex = i;
-                            skipNext = true;
-                            break;
-                        }
-                    }
-                    continue;
-                }
-
-                if (foundSection) {
-                    if (skipNext) {
-                        skipNext = false;
-                        continue;
-                    }
-
-                    if (row.every(cell => !cell || cell.toString().trim() === "")) break;
-
-                    const name = row[colIndex] ? row[colIndex].toString().trim() : null;
-                    let qty = row[colIndex + 1] ? parseFloat(row[colIndex + 1].toString().trim().replace(',', '.')) : null;
-
-                    if (name && !isNaN(qty)) {
-                        if (itemsMap[name]) itemsMap[name] += qty;
-                        else itemsMap[name] = qty;
-                    }
+        if (!foundSubassemblies) {
+            for (let i = 0; i < row.length; i++) {
+                const cell = row[i];
+                if (cell && cell.toString().toLowerCase().includes("сборочные единицы")) {
+                    foundSubassemblies = true;
+                    subColIndex = i;
+                    skipNextSub = true; // skip header
+                    console.log(`🔹 Found "Subassemblies" section in column ${subColIndex}`);
+                    break;
                 }
             }
+            continue;
+        }
 
-            fs.unlinkSync(file.path);
-        });
+        if (foundSubassemblies) {
+            if (skipNextSub) { skipNextSub = false; continue; }
+            if (row.every(c => !c || c.toString().trim() === "")) break;
+
+            const name = row[subColIndex] ? row[subColIndex].toString().trim() : null;
+            const qty = row[subColIndex + 1] ? parseFloat(row[subColIndex + 1].toString().replace(',', '.')) : 1;
+
+            if (name && !isNaN(qty)) {
+                console.log(`🔹 Subassembly: "${name}", qty = ${qty} | multiplier = ${multiplier}`);
+
+                const clean = str => str.toString().trim().toLowerCase();
+                const subFileKey = Object.keys(fileMap).find(f => clean(f) === clean(name));
+
+                if (subFileKey) {
+                    // рекурсия: только qty * текущий multiplier
+                    processWorkbook(fileMap[subFileKey].path, multiplier * qty, itemsMap, fileMap);
+                } else {
+                    console.log("❌ File not found among uploaded files. Searching keys:");
+                    Object.keys(fileMap).forEach(f => console.log("   -", f));
+                }
+            }
+        }
+    }
+
+    // -------------------------------
+    // 2️⃣ Standard items
+    let foundItems = false;
+    let itemColIndex = null;
+    let skipNextItem = false;
+
+    for (let row of rows) {
+        if (!row) continue;
+
+        if (!foundItems) {
+            for (let i = 0; i < row.length; i++) {
+                const cell = row[i];
+                if (cell && cell.toString().toLowerCase().includes("стандартные изделия")) {
+                    foundItems = true;
+                    itemColIndex = i;
+                    skipNextItem = true; // skip header
+                    console.log(`🔹 Found "Standard items" section in column ${itemColIndex}`);
+                    break;
+                }
+            }
+            continue;
+        }
+
+        if (foundItems) {
+            if (skipNextItem) { skipNextItem = false; continue; }
+            if (row.every(c => !c || c.toString().trim() === "")) break;
+
+            const name = row[itemColIndex] ? row[itemColIndex].toString().trim() : null;
+            const qty = row[itemColIndex + 1] ? parseFloat(row[itemColIndex + 1].toString().replace(',', '.')) : 1;
+
+            if (name && !isNaN(qty)) {
+                const totalQty = qty * multiplier;
+                console.log(`✅ Standard item: "${name}", qty = ${qty}, multiplier = ${multiplier}, total = ${totalQty}`);
+                if (itemsMap[name]) itemsMap[name] += totalQty;
+                else itemsMap[name] = totalQty;
+            }
+        }
+    }
+
+    return itemsMap;
+}
+
+app.post("/upload", upload.array("files", 50), (req, res) => {
+    const files = req.files;
+    let multipliers = req.body.multipliers || [];
+
+    if (!Array.isArray(multipliers)) multipliers = [multipliers];
+    if (!files || files.length === 0) return res.status(400).send("No files uploaded");
+
+    const itemsMap = {};
+    const fileMap = {};
+
+    // Сохраняем multiplier только для старта
+// ---- загрузка файлов
+files.forEach((f, i) => {
+    const name = path.parse(f.originalname).name.normalize();
+    const multiplier = parseFloat(multipliers[i]) || 1;
+    fileMap[name] = { path: f.path };   // ❌ без multiplier!
+    console.log("Uploaded file mapped as:", name, "with root multiplier:", multiplier);
+
+    // только здесь применяем multiplier
+    processWorkbook(f.path, multiplier, itemsMap, fileMap);
+});
+
+    try {
+
 
         const newWorkbook = XLSX.utils.book_new();
-        const newSheetData = [["Название изделия", "Количество"]];
-        Object.keys(itemsMap).forEach(name => {
-            newSheetData.push([name, itemsMap[name]]);
-        });
-        const newWorksheet = XLSX.utils.aoa_to_sheet(newSheetData);
-        XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, "Объединённые изделия");
+        const data = [["Item Name", "Quantity"]];
+        Object.keys(itemsMap).forEach(name => data.push([name, itemsMap[name]]));
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        XLSX.utils.book_append_sheet(newWorkbook, ws, "Merged Items");
 
-        const outputFileName = `merged_${Date.now()}.xlsx`;
-        const outputPath = path.join(__dirname, "uploads", outputFileName);
-        XLSX.writeFile(newWorkbook, outputPath);
+        const outFile = `merged_${Date.now()}.xlsx`;
+        const outPath = path.join(__dirname, "uploads", outFile);
+        XLSX.writeFile(newWorkbook, outPath);
 
-        res.download(outputPath, outputFileName, (err) => {
+        res.download(outPath, outFile, err => {
             if (err) console.error(err);
-            fs.unlinkSync(outputPath);
+            files.forEach(f => fs.unlinkSync(f.path));
+            fs.unlinkSync(outPath);
         });
-
     } catch (err) {
         files.forEach(f => fs.unlinkSync(f.path));
-        res.status(500).send("Ошибка при обработке файлов: " + err.message);
+        res.status(500).send("Error: " + err.message);
     }
 });
 
-app.listen(port, () => console.log(`Сервер запущен: http://localhost:${port}`));
+app.listen(port, () => console.log(`Server running at http://localhost:${port}`));

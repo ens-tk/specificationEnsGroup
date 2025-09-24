@@ -2,20 +2,20 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Объединение Excel</title>
+  <title>Объединение Excel с деревом сборочных единиц</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <script src="tree.js" defer></script>
 </head>
 <body>
   <h1>Загрузите Excel-файлы со спецификацией</h1>
-  <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
-    <label for="fileInput" class="custom-btn">Выбрать файлы</label>
-    <span id="fileCounter">Файл не выбран</span>
-    <input type="file" id="fileInput" name="files" accept=".xls,.xlsx" multiple>
 
-    <div class="file-list" id="fileList"></div>
-    <button type="submit">📦 Объединить файлы</button>
-  </form>
+  <label for="rootFileInput" class="custom-btn">Выбрать корневой файл</label>
+  <span id="rootFileCounter">Файл не выбран</span>
+  <input type="file" id="rootFileInput" accept=".xls,.xlsx" style="display:none">
 
-  <script src="script.js"></script>
+  <div id="fileTree"></div>
+  <br>
+  <button id="mergeBtn" class="custom-btn">📦 Объединить все файлы</button>
 </body>
 </html>
