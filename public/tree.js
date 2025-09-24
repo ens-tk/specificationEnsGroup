@@ -139,7 +139,11 @@ function createNodeElement(node) {
 function collectFileNodes(node, currentMultiplier = 1) {
   let result = [];
   if (node && node.file) {
-    result.push({ file: node.file, multiplier: currentMultiplier * node.qty });
+    result.push({
+      file: node.file,
+      multiplier: currentMultiplier * node.qty,
+      name: node.name // чисто для логов
+    });
   }
   node.subassemblies.forEach(sub => {
     result = result.concat(collectFileNodes(sub, currentMultiplier * node.qty));
@@ -147,7 +151,6 @@ function collectFileNodes(node, currentMultiplier = 1) {
   return result;
 }
 
-// Отправка на сервер
 mergeBtn.addEventListener("click", async () => {
   if (!rootFileNode) return alert("Выберите корневой файл");
 
@@ -155,7 +158,8 @@ mergeBtn.addEventListener("click", async () => {
   const formData = new FormData();
   allNodes.forEach(n => {
     formData.append("files", n.file);
-    formData.append("multipliers", n.multiplier); // отдельное поле multiplier
+    formData.append("multipliers", n.multiplier);
+    formData.append("names", n.name); // чисто для отладки
   });
 
   try {

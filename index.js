@@ -10,7 +10,6 @@ const port = 3000;
 const upload = multer({ dest: "uploads/" });
 app.use(express.static("public"));
 
-// 🔄 Recursive Excel processing
 function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) {
     const workbook = XLSX.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
@@ -19,8 +18,7 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
 
     console.log(`\n📄 Processing file: ${path.basename(filePath)} | multiplier = ${multiplier}`);
 
-    // -------------------------------
-    // 1️⃣ Subassemblies
+ 
     let foundSubassemblies = false;
     let subColIndex = null;
     let skipNextSub = false;
@@ -34,7 +32,7 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
                 if (cell && cell.toString().toLowerCase().includes("сборочные единицы")) {
                     foundSubassemblies = true;
                     subColIndex = i;
-                    skipNextSub = true; // skip header
+                    skipNextSub = true;
                     console.log(`🔹 Found "Subassemblies" section in column ${subColIndex}`);
                     break;
                 }
@@ -56,7 +54,6 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
                 const subFileKey = Object.keys(fileMap).find(f => clean(f) === clean(name));
 
                 if (subFileKey) {
-                    // рекурсия: только qty * текущий multiplier
                     processWorkbook(fileMap[subFileKey].path, multiplier * qty, itemsMap, fileMap);
                 } else {
                     console.log("❌ File not found among uploaded files. Searching keys:");
@@ -66,8 +63,6 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
         }
     }
 
-    // -------------------------------
-    // 2️⃣ Standard items
     let foundItems = false;
     let itemColIndex = null;
     let skipNextItem = false;
@@ -81,7 +76,7 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
                 if (cell && cell.toString().toLowerCase().includes("стандартные изделия")) {
                     foundItems = true;
                     itemColIndex = i;
-                    skipNextItem = true; // skip header
+                    skipNextItem = true; 
                     console.log(`🔹 Found "Standard items" section in column ${itemColIndex}`);
                     break;
                 }
@@ -109,49 +104,43 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
 }
 
 app.post("/upload", upload.array("files", 50), (req, res) => {
-    const files = req.files;
-    let multipliers = req.body.multipliers || [];
+  const files = req.files;
+  let multipliers = req.body.multipliers || [];
+  let names = req.body.names || [];
 
-    if (!Array.isArray(multipliers)) multipliers = [multipliers];
-    if (!files || files.length === 0) return res.status(400).send("No files uploaded");
+  if (!Array.isArray(multipliers)) multipliers = [multipliers];
+  if (!Array.isArray(names)) names = [names];
+  if (!files || files.length === 0) return res.status(400).send("No files uploaded");
 
-    const itemsMap = {};
-    const fileMap = {};
+  const itemsMap = {};
 
-    // Сохраняем multiplier только для старта
-// ---- загрузка файлов
-files.forEach((f, i) => {
-    const name = path.parse(f.originalname).name.normalize();
-    const multiplier = parseFloat(multipliers[i]) || 1;
-    fileMap[name] = { path: f.path };   // ❌ без multiplier!
-    console.log("Uploaded file mapped as:", name, "with root multiplier:", multiplier);
+  try {
+    files.forEach((f, i) => {
+      const multiplier = parseFloat(multipliers[i]) || 1;
+      console.log(`📂 Root file: ${names[i] || f.originalname}, multiplier = ${multiplier}`);
+      processWorkbook(f.path, multiplier, itemsMap, {}); 
+    });
 
-    // только здесь применяем multiplier
-    processWorkbook(f.path, multiplier, itemsMap, fileMap);
+    const newWorkbook = XLSX.utils.book_new();
+    const data = [["Item Name", "Quantity"]];
+    Object.keys(itemsMap).forEach(name => data.push([name, itemsMap[name]]));
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    XLSX.utils.book_append_sheet(newWorkbook, ws, "Merged Items");
+
+    const outFile = `merged_${Date.now()}.xlsx`;
+    const outPath = path.join(__dirname, "uploads", outFile);
+    XLSX.writeFile(newWorkbook, outPath);
+
+    res.download(outPath, outFile, err => {
+      if (err) console.error(err);
+      files.forEach(f => fs.unlinkSync(f.path));
+      fs.unlinkSync(outPath);
+    });
+  } catch (err) {
+    files.forEach(f => fs.unlinkSync(f.path));
+    res.status(500).send("Error: " + err.message);
+  }
 });
 
-    try {
-
-
-        const newWorkbook = XLSX.utils.book_new();
-        const data = [["Item Name", "Quantity"]];
-        Object.keys(itemsMap).forEach(name => data.push([name, itemsMap[name]]));
-        const ws = XLSX.utils.aoa_to_sheet(data);
-        XLSX.utils.book_append_sheet(newWorkbook, ws, "Merged Items");
-
-        const outFile = `merged_${Date.now()}.xlsx`;
-        const outPath = path.join(__dirname, "uploads", outFile);
-        XLSX.writeFile(newWorkbook, outPath);
-
-        res.download(outPath, outFile, err => {
-            if (err) console.error(err);
-            files.forEach(f => fs.unlinkSync(f.path));
-            fs.unlinkSync(outPath);
-        });
-    } catch (err) {
-        files.forEach(f => fs.unlinkSync(f.path));
-        res.status(500).send("Error: " + err.message);
-    }
-});
 
 app.listen(port, () => console.log(`Server running at http://localhost:${port}`));
