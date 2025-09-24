@@ -18,7 +18,8 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
 
     console.log(`\n📄 Processing file: ${path.basename(filePath)} | multiplier = ${multiplier}`);
 
- 
+    // -------------------------------
+    // 🔹 Сборочные единицы
     let foundSubassemblies = false;
     let subColIndex = null;
     let skipNextSub = false;
@@ -49,7 +50,6 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
 
             if (name && !isNaN(qty)) {
                 console.log(`🔹 Subassembly: "${name}", qty = ${qty} | multiplier = ${multiplier}`);
-
                 const clean = str => str.toString().trim().toLowerCase();
                 const subFileKey = Object.keys(fileMap).find(f => clean(f) === clean(name));
 
@@ -63,45 +63,69 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
         }
     }
 
-    let foundItems = false;
-    let itemColIndex = null;
-    let skipNextItem = false;
+    // -------------------------------
+    // 🔹 Стандартные изделия
+    processSection(rows, "стандартные изделия", multiplier, itemsMap);
+
+    // -------------------------------
+    // 🔹 Прочие изделия
+    processSection(rows, "прочие изделия", multiplier, itemsMap);
+
+    return itemsMap;
+}
+
+// 🔧 Универсальная функция для сбора изделий из секции
+// 🔧 Универсальная функция для сбора изделий из секции
+function processSection(rows, keyword, multiplier, itemsMap) {
+    let found = false;
+    let colIndex = null;
+    let skipNext = false;
 
     for (let row of rows) {
         if (!row) continue;
 
-        if (!foundItems) {
+        if (!found) {
             for (let i = 0; i < row.length; i++) {
                 const cell = row[i];
-                if (cell && cell.toString().toLowerCase().includes("стандартные изделия")) {
-                    foundItems = true;
-                    itemColIndex = i;
-                    skipNextItem = true; 
-                    console.log(`🔹 Found "Standard items" section in column ${itemColIndex}`);
+                if (cell && cell.toString().toLowerCase().includes(keyword)) {
+                    found = true;
+                    colIndex = i;
+                    skipNext = true;
+                    console.log(`🔹 Found "${keyword}" section in column ${colIndex}`);
                     break;
                 }
             }
             continue;
         }
 
-        if (foundItems) {
-            if (skipNextItem) { skipNextItem = false; continue; }
+        if (found) {
+            if (skipNext) { skipNext = false; continue; }
             if (row.every(c => !c || c.toString().trim() === "")) break;
 
-            const name = row[itemColIndex] ? row[itemColIndex].toString().trim() : null;
-            const qty = row[itemColIndex + 1] ? parseFloat(row[itemColIndex + 1].toString().replace(',', '.')) : 1;
+            // Основное имя (в колонке с названием изделия)
+            let name = row[colIndex] ? row[colIndex].toString().trim() : null;
+
+            // Если в ЛЕВОЙ ячейке есть данные → добавить их через "_"
+            if (name && colIndex > 0 && row[colIndex - 1]) {
+                name = name + "_" + row[colIndex - 1].toString().trim();
+            }
+
+            const qty = row[colIndex + 1] 
+                ? parseFloat(row[colIndex + 1].toString().replace(',', '.')) 
+                : 1;
 
             if (name && !isNaN(qty)) {
                 const totalQty = qty * multiplier;
-                console.log(`✅ Standard item: "${name}", qty = ${qty}, multiplier = ${multiplier}, total = ${totalQty}`);
+                console.log(`✅ ${keyword}: "${name}", qty = ${qty}, multiplier = ${multiplier}, total = ${totalQty}`);
                 if (itemsMap[name]) itemsMap[name] += totalQty;
                 else itemsMap[name] = totalQty;
             }
         }
     }
-
-    return itemsMap;
 }
+
+
+
 
 app.post("/upload", upload.array("files", 50), (req, res) => {
   const files = req.files;
