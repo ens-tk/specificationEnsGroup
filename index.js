@@ -18,8 +18,6 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
 
     console.log(`\n📄 Processing file: ${path.basename(filePath)} | multiplier = ${multiplier}`);
 
-    // -------------------------------
-    // 🔹 Сборочные единицы
     let foundSubassemblies = false;
     let subColIndex = null;
     let skipNextSub = false;
@@ -63,19 +61,13 @@ function processWorkbook(filePath, multiplier = 1, itemsMap = {}, fileMap = {}) 
         }
     }
 
-    // -------------------------------
-    // 🔹 Стандартные изделия
     processSection(rows, "стандартные изделия", multiplier, itemsMap);
 
-    // -------------------------------
-    // 🔹 Прочие изделия
     processSection(rows, "прочие изделия", multiplier, itemsMap);
 
     return itemsMap;
 }
 
-// 🔧 Универсальная функция для сбора изделий из секции
-// 🔧 Универсальная функция для сбора изделий из секции
 function processSection(rows, keyword, multiplier, itemsMap) {
     let found = false;
     let colIndex = null;
@@ -102,10 +94,8 @@ function processSection(rows, keyword, multiplier, itemsMap) {
             if (skipNext) { skipNext = false; continue; }
             if (row.every(c => !c || c.toString().trim() === "")) break;
 
-            // Основное имя (в колонке с названием изделия)
             let name = row[colIndex] ? row[colIndex].toString().trim() : null;
 
-            // Если в ЛЕВОЙ ячейке есть данные → добавить их через "_"
             if (name && colIndex > 0 && row[colIndex - 1]) {
                 name = name + "_" + row[colIndex - 1].toString().trim();
             }
@@ -116,7 +106,7 @@ function processSection(rows, keyword, multiplier, itemsMap) {
 
             if (name && !isNaN(qty)) {
                 const totalQty = qty * multiplier;
-                console.log(`✅ ${keyword}: "${name}", qty = ${qty}, multiplier = ${multiplier}, total = ${totalQty}`);
+                console.log(` ${keyword}: "${name}", qty = ${qty}, multiplier = ${multiplier}, total = ${totalQty}`);
                 if (itemsMap[name]) itemsMap[name] += totalQty;
                 else itemsMap[name] = totalQty;
             }
