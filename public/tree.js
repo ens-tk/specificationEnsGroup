@@ -11,11 +11,9 @@ function FileNode(file, name = null) {
   this.children = [];
   this.subassemblies = [];
   this.qty = 1;
-  this.expanded = true; // 🔹 по умолчанию раскрыт
+  this.expanded = true;
 }
 
-
-// Выбор корневого файла
 rootInput.addEventListener("change", e => {
   const file = e.target.files[0];
   if (!file) return;
@@ -25,7 +23,6 @@ rootInput.addEventListener("change", e => {
   readSubAssemblies(file, rootFileNode).then(() => renderTree());
 });
 
-// Считываем сборочные единицы и их количество
 async function readSubAssemblies(file, node) {
   const data = await file.arrayBuffer();
   const workbook = XLSX.read(data);
@@ -58,10 +55,9 @@ async function readSubAssemblies(file, node) {
       if (row.every(c => !c || c.toString().trim() === "")) break;
 
       const name = row[colIndex] ? row[colIndex].toString().trim() : null;
-const qty = row[colIndex + 1] 
-  ? parseFloat(row[colIndex + 1].toString().replace(',', '.')) 
-  : 1;
-
+      const qty = row[colIndex + 1] 
+        ? parseFloat(row[colIndex + 1].toString().replace(',', '.')) 
+        : 1;
 
       if (name) {
         const nodeSub = new FileNode(null, name);
@@ -74,7 +70,6 @@ const qty = row[colIndex + 1]
   node.subassemblies = subassemblies;
 }
 
-// Отрисовка дерева
 function renderTree() {
   fileTree.innerHTML = "";
   if (rootFileNode) fileTree.appendChild(createNodeElement(rootFileNode));
@@ -87,16 +82,16 @@ function createNodeElement(node) {
   const header = document.createElement("div");
   header.className = "node-header";
 
-const toggle = document.createElement("span");
-toggle.className = "toggle-btn";
-toggle.textContent = node.subassemblies.length > 0
-  ? (node.expanded ? "▼" : "▶")
-  : "";
+  const toggle = document.createElement("span");
+  toggle.className = "toggle-btn";
+  toggle.textContent = node.subassemblies.length > 0
+    ? (node.expanded ? "▼" : "▶")
+    : "";
 
-toggle.onclick = () => {
-  node.expanded = !node.expanded; // 🔹 сохраняем состояние
-  renderTree(); // перерисовываем
-};
+  toggle.onclick = () => {
+    node.expanded = !node.expanded;
+    renderTree();
+  };
 
   const span = document.createElement("span");
   span.textContent = node.name;
@@ -128,25 +123,23 @@ toggle.onclick = () => {
 
   div.appendChild(header);
 
-const childrenDiv = document.createElement("div");
-childrenDiv.className = "children";
-childrenDiv.style.marginLeft = "20px";
-childrenDiv.style.display = node.expanded ? "block" : "none"; // 🔹 учёт expanded
-node.subassemblies.forEach(sub => childrenDiv.appendChild(createNodeElement(sub)));
-div.appendChild(childrenDiv);
+  const childrenDiv = document.createElement("div");
+  childrenDiv.className = "children";
+  childrenDiv.style.marginLeft = "20px";
+  childrenDiv.style.display = node.expanded ? "block" : "none";
+  node.subassemblies.forEach(sub => childrenDiv.appendChild(createNodeElement(sub)));
+  div.appendChild(childrenDiv);
 
   return div;
 }
 
-// Сбор всех файлов
-// Сбор всех файлов с multiplier
 function collectFileNodes(node, currentMultiplier = 1) {
   let result = [];
   if (node && node.file) {
     result.push({
       file: node.file,
       multiplier: currentMultiplier * node.qty,
-      name: node.name // чисто для логов
+      name: node.name
     });
   }
   node.subassemblies.forEach(sub => {
@@ -155,15 +148,40 @@ function collectFileNodes(node, currentMultiplier = 1) {
   return result;
 }
 
+function collectAllNodes(node, parentName = "", parentQty = 1) {
+  let result = [];
+
+  const currentNode = {
+    file: node.file || null,
+    multiplier: parentQty * node.qty,
+    name: node.name,
+    parentName: parentName,
+    parentQty: parentQty
+  };
+
+  result.push(currentNode);
+
+  node.subassemblies.forEach(sub => {
+    result = result.concat(
+      collectAllNodes(sub, node.name, parentQty * node.qty)
+    );
+  });
+
+  return result;
+}
+
 mergeBtn.addEventListener("click", async () => {
   if (!rootFileNode) return alert("Выберите корневой файл");
 
-  const allNodes = collectFileNodes(rootFileNode);
+  const allNodes = collectAllNodes(rootFileNode);
   const formData = new FormData();
+
   allNodes.forEach(n => {
-    formData.append("files", n.file);
+    if (n.file) formData.append("files", n.file);
     formData.append("multipliers", n.multiplier);
-    formData.append("names", n.name); // чисто для отладки
+    formData.append("names", n.name);
+    formData.append("parents", n.parentName);
+    formData.append("parentQtys", n.parentQty);
   });
 
   try {
